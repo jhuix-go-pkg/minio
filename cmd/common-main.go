@@ -51,18 +51,19 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/color"
-	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/handlers"
-	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/console"
 	"github.com/minio/pkg/ellipses"
 	"github.com/minio/pkg/env"
 	xnet "github.com/minio/pkg/net"
 	"github.com/rs/dnscache"
+
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/handlers"
+	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 // serverDebugLog will enable debug printing
@@ -796,6 +797,41 @@ func handleCommonEnvVars() {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
 		GlobalKMS = KMS
+	}
+
+	// EnvMinPartSize, EnvMaxPartSize, EnvMaxObjectSize
+	if env.IsSet(config.EnvMinPartSize) {
+		envValue := env.Get(config.EnvMinPartSize, "")
+		if len(envValue) > 0 {
+			val, _ := strconv.ParseUint(envValue, 10, 64)
+			minPartSize := int64(val)
+			if minPartSize < 2048 {
+				minPartSize = 2048
+			}
+			if minPartSize < globalMaxObjectSize && minPartSize != globalMinPartSize {
+				globalMinPartSize = minPartSize
+			}
+		}
+	}
+	if env.IsSet(config.EnvMaxPartSize) {
+		envValue := env.Get(config.EnvMaxPartSize, "")
+		if len(envValue) > 0 {
+			val, _ := strconv.ParseUint(envValue, 10, 64)
+			maxPartSize := int64(val)
+			if maxPartSize < globalMinPartSize && maxPartSize != globalMaxPartSize {
+				globalMaxPartSize = maxPartSize
+			}
+		}
+	}
+	if env.IsSet(config.EnvMaxObjectSize) {
+		envValue := env.Get(config.EnvMaxObjectSize, "")
+		if len(envValue) > 0 {
+			val, _ := strconv.ParseUint(envValue, 10, 64)
+			maxObjectSize := int64(val)
+			if maxObjectSize > globalMaxPartSize && maxObjectSize != globalMaxObjectSize {
+				globalMaxObjectSize = maxObjectSize
+			}
+		}
 	}
 }
 

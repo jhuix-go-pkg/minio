@@ -414,7 +414,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 }
 
 // fsDeleteFile is a wrapper for deleteFile(), after checking the path length.
-func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
+func fsDeleteFile(ctx context.Context, basePath, deletePath string, recursive bool) error {
 	if err := checkPathLength(basePath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
@@ -425,7 +425,7 @@ func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
 		return err
 	}
 
-	if err := deleteFile(basePath, deletePath, false); err != nil {
+	if err := deleteFile(basePath, deletePath, recursive); err != nil {
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
@@ -472,10 +472,10 @@ func fsRemoveMeta(ctx context.Context, basePath, deletePath, tmpDir string) erro
 		fsRenameFile(ctx, deletePath, tmpPath)
 
 		// Proceed to deleting the directory if empty
-		fsDeleteFile(ctx, basePath, pathutil.Dir(deletePath))
+		fsDeleteFile(ctx, basePath, pathutil.Dir(deletePath), false)
 
 		// Finally delete the renamed file.
-		return fsDeleteFile(ctx, tmpDir, tmpPath)
+		return fsDeleteFile(ctx, tmpDir, tmpPath, false)
 	}
-	return fsDeleteFile(ctx, basePath, deletePath)
+	return fsDeleteFile(ctx, basePath, deletePath, false)
 }

@@ -73,4 +73,8 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
+
+	EnvMinPartSize   = "MINIO_MIN_PART_SIZE"
+	EnvMaxPartSize   = "MINIO_MAX_PART_SIZE"
+	EnvMaxObjectSize = "MINIO_MAX_OBJECT_SIZE"
 )

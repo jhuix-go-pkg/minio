@@ -67,7 +67,8 @@ type ObjectOptions struct {
 	ReplicationSourceTaggingTimestamp   time.Time // set if MinIOSourceTaggingTimestamp received
 	ReplicationSourceLegalholdTimestamp time.Time // set if MinIOSourceObjectLegalholdTimestamp received
 	ReplicationSourceRetentionTimestamp time.Time // set if MinIOSourceObjectRetentionTimestamp received
-	DeletePrefix                        bool      //  set true to enforce a prefix deletion, only application for DeleteObject API,
+	DeletePrefix                        bool      // set true to enforce a prefix deletion , only application for DeleteObject API,
+	Recursive                           bool      // set true to enforce delete object or object dir, only application for DeleteObject API,
 
 	// Use the maximum parity (N/2), used when saving server configuration files
 	MaxParity bool

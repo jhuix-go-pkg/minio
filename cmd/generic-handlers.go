@@ -30,6 +30,7 @@ import (
 	xnet "github.com/minio/pkg/net"
 
 	"github.com/dustin/go-humanize"
+
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
@@ -42,16 +43,16 @@ const (
 	// which is more than enough to accommodate any form data fields and headers.
 	requestFormDataSize = 64 * humanize.MiByte
 
-	// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
-	// where, 16GiB is the maximum allowed object size for object upload.
-	requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
-
 	// Maximum size for http headers - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxHeaderSize = 8 * 1024
 
 	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 	maxUserDataSize = 2 * 1024
 )
+
+// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
+// where, 16GiB is the maximum allowed object size for object upload.
+var requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
 
 // ReservedMetadataPrefix is the prefix of a metadata key which
 // is reserved and for internal use only.

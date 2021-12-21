@@ -1190,7 +1190,7 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	}
 
 	// Delete the object.
-	if err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
+	if err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object), opts.Recursive); err != nil {
 		if rwlk != nil {
 			rwlk.Close()
 		}
@@ -1204,7 +1204,7 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
-		err = fsDeleteFile(ctx, minioMetaBucketDir, fsMetaPath)
+		err = fsDeleteFile(ctx, minioMetaBucketDir, fsMetaPath, opts.Recursive)
 		if err != nil && err != errFileNotFound {
 			return objInfo, toObjectErr(err, bucket, object)
 		}

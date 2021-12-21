@@ -190,4 +190,6 @@ const (
 	PartNumber = "partNumber"
 
 	UploadID = "uploadId"
+
+	Recursive = "recursive"
 )

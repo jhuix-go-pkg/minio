@@ -167,18 +167,18 @@ func hasContentMD5(h http.Header) bool {
 }
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
-const (
+var (
 	// Maximum object size per PUT request is 5TB.
 	// This is a divergence from S3 limit on purpose to support
 	// use cases where users are going to upload large files
 	// using 'curl' and presigned URL.
-	globalMaxObjectSize = 5 * humanize.TiByte
+	globalMaxObjectSize int64 = 5 * humanize.TiByte
 
 	// Minimum Part size for multipart upload is 5MiB
-	globalMinPartSize = 5 * humanize.MiByte
+	globalMinPartSize int64 = 5 * humanize.MiByte
 
 	// Maximum Part size for multipart upload is 5GiB
-	globalMaxPartSize = 5 * humanize.GiByte
+	globalMaxPartSize int64 = 5 * humanize.GiByte
 
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)

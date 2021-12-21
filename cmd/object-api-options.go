@@ -141,6 +141,10 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	opts.DeletePrefix = deletePrefix
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
+	recursive := strings.TrimSpace(r.Form.Get(xhttp.Recursive))
+	if recursive != "" && strings.ToLower(recursive) == "true" {
+		opts.Recursive = true
+	}
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
 		switch delMarker {
