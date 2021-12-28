@@ -805,9 +805,6 @@ func handleCommonEnvVars() {
 		if len(envValue) > 0 {
 			val, _ := strconv.ParseUint(envValue, 10, 64)
 			minPartSize := int64(val)
-			if minPartSize < 2048 {
-				minPartSize = 2048
-			}
 			if minPartSize < globalMaxObjectSize && minPartSize != globalMinPartSize {
 				globalMinPartSize = minPartSize
 			}
