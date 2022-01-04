@@ -58,17 +58,9 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := globalIAMSys.DeleteUser(ctx, accessKey); err != nil {
+	if err := globalIAMSys.DeleteUser(ctx, accessKey, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-
-	// Notify all other MinIO peers to delete user.
-	for _, nerr := range globalNotificationSys.DeleteUser(accessKey) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 }
 
@@ -424,14 +416,14 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var uinfo madmin.UserInfo
-	if err = json.Unmarshal(configBytes, &uinfo); err != nil {
+	var ureq madmin.AddOrUpdateUserReq
+	if err = json.Unmarshal(configBytes, &ureq); err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
-	if err = globalIAMSys.CreateUser(ctx, accessKey, uinfo); err != nil {
+	if err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -621,7 +613,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	var createResp = madmin.AddServiceAccountResp{
+	createResp := madmin.AddServiceAccountResp{
 		Credentials: madmin.Credentials{
 			AccessKey: newCred.AccessKey,
 			SecretKey: newCred.SecretKey,
@@ -822,7 +814,7 @@ func (a adminAPIHandlers) InfoServiceAccount(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var infoResp = madmin.InfoServiceAccountResp{
+	infoResp := madmin.InfoServiceAccountResp{
 		ParentUser:    svcAccount.ParentUser,
 		AccountStatus: svcAccount.Status,
 		ImpliedPolicy: impliedPolicy,
@@ -899,7 +891,7 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 		serviceAccountsNames = append(serviceAccountsNames, svc.AccessKey)
 	}
 
-	var listResp = madmin.ListServiceAccountsResp{
+	listResp := madmin.ListServiceAccountsResp{
 		Accounts: serviceAccountsNames,
 	}
 
@@ -978,16 +970,10 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
+	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount, true)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	}
-	for _, nerr := range globalNotificationSys.DeleteServiceAccount(serviceAccount) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// Call site replication hook. Only LDAP accounts are supported for
@@ -1265,7 +1251,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var newPolicies = make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]iampolicy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
@@ -1297,7 +1283,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var newPolicies = make(map[string]iampolicy.Policy)
+	newPolicies := make(map[string]iampolicy.Policy)
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {

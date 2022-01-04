@@ -24,13 +24,57 @@ import (
 	"testing"
 )
 
+func Test_readFromSecret(t *testing.T) {
+	testCases := []struct {
+		content       string
+		expectedErr   bool
+		expectedValue string
+	}{
+		{
+			"value\n",
+			false,
+			"value",
+		},
+		{
+			" \t\n Hello, Gophers \n\t\r\n",
+			false,
+			"Hello, Gophers",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			tmpfile, err := ioutil.TempFile("", "testfile")
+			if err != nil {
+				t.Error(err)
+			}
+			tmpfile.WriteString(testCase.content)
+			tmpfile.Sync()
+			tmpfile.Close()
+
+			value, err := readFromSecret(tmpfile.Name())
+			if err != nil && !testCase.expectedErr {
+				t.Error(err)
+			}
+			if err == nil && testCase.expectedErr {
+				t.Error(errors.New("expected error, found success"))
+			}
+			if value != testCase.expectedValue {
+				t.Errorf("Expected %s, got %s", testCase.expectedValue, value)
+			}
+		})
+	}
+}
+
 func Test_minioEnvironFromFile(t *testing.T) {
 	testCases := []struct {
 		content      string
 		expectedErr  bool
 		expectedEkvs []envKV
 	}{
-		{`
+		{
+			`
 export MINIO_ROOT_USER=minio
 export MINIO_ROOT_PASSWORD=minio123`,
 			false,
@@ -46,7 +90,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			},
 		},
 		// Value with double quotes
-		{`export MINIO_ROOT_USER="minio"`,
+		{
+			`export MINIO_ROOT_USER="minio"`,
 			false,
 			[]envKV{
 				{
@@ -56,7 +101,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 			},
 		},
 		// Value with single quotes
-		{`export MINIO_ROOT_USER='minio'`,
+		{
+			`export MINIO_ROOT_USER='minio'`,
 			false,
 			[]envKV{
 				{
@@ -65,7 +111,8 @@ export MINIO_ROOT_PASSWORD=minio123`,
 				},
 			},
 		},
-		{`
+		{
+			`
 MINIO_ROOT_USER=minio
 MINIO_ROOT_PASSWORD=minio123`,
 			false,
@@ -80,7 +127,8 @@ MINIO_ROOT_PASSWORD=minio123`,
 				},
 			},
 		},
-		{`
+		{
+			`
 export MINIO_ROOT_USERminio
 export MINIO_ROOT_PASSWORD=minio123`,
 			true,

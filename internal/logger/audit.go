@@ -147,7 +147,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 		r = &audit.Entry{
 			Version:      audit.Version,
 			DeploymentID: globalDeploymentID,
-			Time:         time.Now().UTC().Format(time.RFC3339Nano),
+			Time:         time.Now().UTC(),
 		}
 		SetAuditEntry(ctx, r)
 		return r
@@ -208,6 +208,13 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.Name = reqInfo.API
 		entry.API.Bucket = reqInfo.BucketName
 		entry.API.Object = reqInfo.ObjectName
+		entry.API.Objects = make([]audit.ObjectVersion, 0, len(reqInfo.Objects))
+		for _, ov := range reqInfo.Objects {
+			entry.API.Objects = append(entry.API.Objects, audit.ObjectVersion{
+				ObjectName: ov.ObjectName,
+				VersionID:  ov.VersionID,
+			})
+		}
 		entry.API.Status = http.StatusText(statusCode)
 		entry.API.StatusCode = statusCode
 		entry.API.InputBytes = r.ContentLength

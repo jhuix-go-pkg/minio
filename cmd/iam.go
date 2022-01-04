@@ -170,7 +170,6 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	} else {
 		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
-
 }
 
 // Initialized checks if IAM is initialized
@@ -214,9 +213,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Indicate to our routine to exit cleanly upon return.
 	defer cancel()
 
-	// Hold the lock for migration only.
-	txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
-
 	// allocate dynamic timeout once before the loop
 	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
@@ -224,6 +220,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	// Migrate storage format if needed.
 	for {
+		// Hold the lock for migration only.
+		txnLk := objAPI.NewNSLock(minioMetaBucket, minioConfigPrefix+"/iam.lock")
+
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		lkctx, err := txnLk.GetLock(retryCtx, iamLockTimeout)
@@ -536,12 +535,26 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p iampolicy
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
-func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, regUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, regUser); err != nil {
+		return err
+	}
+
+	// Notify all other MinIO peers to delete user.
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteUser(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CurrentPolicies - returns comma separated policy string, from
@@ -787,9 +800,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		}
 	}
 
-	var (
-		cred auth.Credentials
-	)
+	var cred auth.Credentials
 
 	var err error
 	if len(opts.accessKey) > 0 {
@@ -912,7 +923,7 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 }
 
 // DeleteServiceAccount - delete a service account
-func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -922,12 +933,25 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 		return nil
 	}
 
-	return sys.store.DeleteUser(ctx, accessKey, svcUser)
+	if err := sys.store.DeleteUser(ctx, accessKey, svcUser); err != nil {
+		return err
+	}
+
+	if notifyPeers && !sys.HasWatcher() {
+		for _, nerr := range sys.notificationSys.DeleteServiceAccount(accessKey) {
+			if nerr.Err != nil {
+				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // CreateUser - create new user credentials and policy, if user already exists
 // they shall be rewritten with new inputs.
-func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmin.UserInfo) error {
+func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -940,11 +964,11 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, uinfo madmi
 		return auth.ErrInvalidAccessKeyLength
 	}
 
-	if !auth.IsSecretKeyValid(uinfo.SecretKey) {
+	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return auth.ErrInvalidSecretKeyLength
 	}
 
-	err := sys.store.AddUser(ctx, accessKey, uinfo)
+	err := sys.store.AddUser(ctx, accessKey, ureq)
 	if err != nil {
 		return err
 	}

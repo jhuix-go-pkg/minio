@@ -82,6 +82,7 @@ const (
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
+	ErrAccessKeyDisabled
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
@@ -514,6 +515,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The Access Key Id you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
+	ErrAccessKeyDisabled: {
+		Code:           "InvalidAccessKeyId",
+		Description:    "Your account is disabled; please contact your administrator.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 	ErrInvalidBucketName: {
 		Code:           "InvalidBucketName",
 		Description:    "The specified bucket is not valid.",
@@ -681,7 +687,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrAllAccessDisabled: {
 		Code:           "AllAccessDisabled",
-		Description:    "All access to this bucket has been disabled.",
+		Description:    "All access to this resource has been disabled.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrMalformedPolicy: {
@@ -2119,7 +2125,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		return noError
 	}
 
-	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
+	apiErr := errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
 	e, ok := err.(dns.ErrInvalidBucketName)
 	if ok {
 		code := toAPIErrorCode(ctx, e)
@@ -2232,7 +2238,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 			// since S3 only sends one Error XML response.
 			if len(e.Errors) >= 1 {
 				apiErr.Code = e.Errors[0].Reason
-
 			}
 		case azblob.StorageError:
 			apiErr = APIError{

@@ -25,7 +25,6 @@ import (
 	"io/fs"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -40,7 +39,6 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
-	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/console"
 )
@@ -72,14 +70,16 @@ var (
 // initDataScanner will start the scanner in the background.
 func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	go func() {
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
 		// Run the data scanner in a loop
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				runDataScanner(ctx, objAPI)
+			runDataScanner(ctx, objAPI)
+			duration := time.Duration(r.Float64() * float64(scannerCycle.Get()))
+			if duration < time.Second {
+				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				duration = time.Second
 			}
+			time.Sleep(duration)
 		}
 	}()
 }
@@ -106,36 +106,26 @@ func (s *safeDuration) Get() time.Duration {
 // There should only ever be one scanner running per cluster.
 func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 scanner is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "runDataScanner.lock")
-	var ctx context.Context
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for {
-		lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
-		if err != nil {
-			time.Sleep(time.Duration(r.Float64() * float64(scannerCycle.Get())))
-			continue
+	locker := objAPI.NewNSLock(minioMetaBucket, "scanner/runDataScanner.lock")
+	lkctx, err := locker.GetLock(pctx, dataScannerLeaderLockTimeout)
+	if err != nil {
+		if intDataUpdateTracker.debug {
+			logger.LogIf(pctx, err)
 		}
-		ctx = lkctx.Context()
-		defer lkctx.Cancel()
-		break
-		// No unlock for "leader" lock.
+		return
 	}
+	ctx := lkctx.Context()
+	defer lkctx.Cancel()
+	// No unlock for "leader" lock.
 
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1
 
-	br, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageBloomName, nil, http.Header{}, readLock, ObjectOptions{})
-	if err != nil {
-		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
+	buf, _ := readConfig(ctx, objAPI, dataUsageBloomNamePath)
+	if len(buf) >= 8 {
+		if err = binary.Read(bytes.NewReader(buf), binary.LittleEndian, &nextBloomCycle); err != nil {
 			logger.LogIf(ctx, err)
 		}
-	} else {
-		if br.ObjInfo.Size == 8 {
-			if err = binary.Read(br, binary.LittleEndian, &nextBloomCycle); err != nil {
-				logger.LogIf(ctx, err)
-			}
-		}
-		br.Close()
 	}
 
 	scannerTimer := time.NewTimer(scannerCycle.Get())
@@ -165,14 +155,7 @@ func runDataScanner(pctx context.Context, objAPI ObjectLayer) {
 				nextBloomCycle++
 				var tmp [8]byte
 				binary.LittleEndian.PutUint64(tmp[:], nextBloomCycle)
-				r, err := hash.NewReader(bytes.NewReader(tmp[:]), int64(len(tmp)), "", "", int64(len(tmp)))
-				if err != nil {
-					logger.LogIf(ctx, err)
-					continue
-				}
-
-				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r), ObjectOptions{})
-				if !isErrBucketNotFound(err) {
+				if err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp[:]); err != nil {
 					logger.LogIf(ctx, err)
 				}
 			}
@@ -277,7 +260,6 @@ func scanDataFolder(ctx context.Context, basePath string, cache dataUsageCache, 
 		defer func() {
 			console.Debugf(logPrefix+" Scanner time: %v %s\n", time.Since(t), logSuffix)
 		}()
-
 	}
 
 	switch cache.Info.Name {
@@ -875,8 +857,10 @@ func (i *scannerItem) transformMetaDir() {
 	i.objectName = split[len(split)-1]
 }
 
-var applyActionsLogPrefix = color.Green("applyActions:")
-var applyVersionActionsLogPrefix = color.Green("applyVersionActions:")
+var (
+	applyActionsLogPrefix        = color.Green("applyActions:")
+	applyVersionActionsLogPrefix = color.Green("applyVersionActions:")
+)
 
 func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi ObjectInfo) (size int64) {
 	if i.debug {
@@ -979,7 +963,6 @@ func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi O
 	if ignoreNotFoundErr(err) != nil {
 		logger.LogIf(ctx, err)
 	}
-
 }
 
 // applyNewerNoncurrentVersionLimit removes noncurrent versions older than the most recent NewerNoncurrentVersions configured.
@@ -1026,8 +1009,10 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		}
 
 		toDel = append(toDel, ObjectToDelete{
-			ObjectName: fi.Name,
-			VersionID:  fi.VersionID,
+			ObjectV: ObjectV{
+				ObjectName: fi.Name,
+				VersionID:  fi.VersionID,
+			},
 		})
 	}
 
@@ -1100,7 +1085,6 @@ func applyTransitionRule(obj ObjectInfo) bool {
 	}
 	globalTransitionState.queueTransitionTask(obj)
 	return true
-
 }
 
 func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
