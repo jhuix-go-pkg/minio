@@ -808,7 +808,7 @@ func handleCommonEnvVars() {
 			if minPartSize < globalMaxObjectSize && minPartSize != globalMinPartSize {
 				globalMinPartSize = minPartSize
 			}
-			logger.Info("Global min part size is ", globalMinPartSize)
+			logger.Info(fmt.Sprintf("Global min part size is %d", globalMinPartSize))
 		}
 	}
 	if env.IsSet(config.EnvMaxPartSize) {
@@ -819,7 +819,7 @@ func handleCommonEnvVars() {
 			if maxPartSize < globalMinPartSize && maxPartSize != globalMaxPartSize {
 				globalMaxPartSize = maxPartSize
 			}
-			logger.Info("Global max part size is ", globalMaxPartSize)
+			logger.Info(fmt.Sprintf("Global max part size is %d", globalMaxPartSize))
 		}
 	}
 	if env.IsSet(config.EnvMaxObjectSize) {
@@ -830,7 +830,7 @@ func handleCommonEnvVars() {
 			if maxObjectSize > globalMaxPartSize && maxObjectSize != globalMaxObjectSize {
 				globalMaxObjectSize = maxObjectSize
 			}
-			logger.Info("Global max object size is ", globalMaxObjectSize)
+			logger.Info(fmt.Sprintf("Global max object size is %d", globalMaxObjectSize))
 		}
 	}
 }
